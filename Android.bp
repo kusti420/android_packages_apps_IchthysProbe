@@ -1,0 +1,41 @@
+// IchthysOS: privacy/security test app. Measures what an ordinary third-party app can observe,
+// permission by permission, and checks the IchthysOS privacy features against their promises.
+//
+// NOT shipped: it is in no PRODUCT_PACKAGES list and must stay that way. It has to behave like a
+// user-installed app: testkey (not platform), not privileged, no allowlisted permissions.
+// Build with `m IchthysProbe IchthysProbeHelper`, install both with adb (see README.md).
+
+android_app {
+    name: "IchthysProbe",
+    srcs: ["src/**/*.java"],
+    manifest: "AndroidManifest.xml",
+    resource_dirs: [],
+    sdk_version: "current",
+    certificate: "testkey",
+    privileged: false,
+    optimize: {
+        enabled: false,
+    },
+    dex_preopt: {
+        enabled: false,
+    },
+}
+
+// The "other app" for the clipboard checks: copies a clip and tries background reads, so the
+// probe never needs the user's real clipboard content. No launcher activity, so Guard's
+// first-launch quarantine leaves it alone.
+android_app {
+    name: "IchthysProbeHelper",
+    srcs: ["helper/src/**/*.java"],
+    manifest: "helper/AndroidManifest.xml",
+    resource_dirs: [],
+    sdk_version: "current",
+    certificate: "testkey",
+    privileged: false,
+    optimize: {
+        enabled: false,
+    },
+    dex_preopt: {
+        enabled: false,
+    },
+}
