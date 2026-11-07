@@ -37,6 +37,7 @@ import org.ichthys.probe.Shields;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -159,12 +160,12 @@ public final class SensorProbes {
                         return Result.empty().put("events", 0);
                     }
                     final Result r = Result.visible()
-                            .put("rate_hz", String.format("%.1f", a.hz))
+                            .put("rate_hz", String.format(Locale.ROOT, "%.1f", a.hz))
                             .put("events_2s", a.events)
                             .put("min_delay_us", s.getMinDelay())
-                            .put("grid_error_steps", String.format("%.3f", gridError(a.values,
+                            .put("grid_error_steps", String.format(Locale.ROOT, "%.3f", gridError(a.values,
                                     step)))
-                            .put("smallest_step", String.format("%.5f", smallestStep(a.values)));
+                            .put("smallest_step", String.format(Locale.ROOT, "%.5f", smallestStep(a.values)));
                     r.put("_step", String.valueOf(step));
                     return r;
                 })
@@ -345,7 +346,7 @@ public final class SensorProbes {
         }
         return Result.visible()
                 .put("events_1_5s", a.events)
-                .put("rate_hz", String.format("%.1f", a.hz))
+                .put("rate_hz", String.format(Locale.ROOT, "%.1f", a.hz))
                 .put("value_" + unit, Redact.bucket(Math.round(a.values.get(0)[0])))
                 .put("vendor", "Android".equals(s.getVendor()) ? "Android"
                         : Redact.text(s.getVendor()));
