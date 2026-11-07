@@ -616,7 +616,7 @@ public final class SpoofProbes {
                 .timeout(30_000));
 
         out.add(new Probe(CAT, "spoof.dns_leak",
-                "Which resolvers carry this app's DNS lookups: three lookups of a random name under "
+                "Which resolvers carry this app's DNS lookups: a lookup of a random name under "
                         + "dnsleak.am.i.mullvad.net through the system resolver, then Mullvad's list of "
                         + "the resolvers that asked for it (their countries and the Mullvad flag only, "
                         + "no addresses). A lookup that works while the app is offline is a leak too.",
@@ -626,20 +626,25 @@ public final class SpoofProbes {
                             c.app.getSystemService(ConnectivityManager.class);
                     final Network active = cm.getActiveNetwork();
                     final String id = java.util.UUID.randomUUID().toString();
+                    final String[] r_id = new String[1];
                     int resolved = 0;
                     String lookupError = null;
-                    for (int i = 0; i < 3; i++) {
+                    // Mullvad keys the record on the name's first label, which must be the UUID
+                    // itself; a second try covers a lost UDP packet (a cached answer is fine).
+                    for (int i = 0; i < 2 && resolved == 0; i++) {
                         try {
-                            // The resolver caches per name: three distinct names, three queries.
-                            java.net.InetAddress.getAllByName(i == 0 ? id + ".dnsleak.am.i.mullvad.net"
-                                    : id.substring(0, 8) + i + "-" + id + ".dnsleak.am.i.mullvad.net");
+                            java.net.InetAddress.getAllByName(id + ".dnsleak.am.i.mullvad.net");
                             resolved++;
                         } catch (Exception e) {
                             lookupError = Redact.exception(e);
                         }
                     }
+                    r_id[0] = id;
                     final Result r = Result.visible();
                     r.put("dns_lookups_ok", resolved);
+                    // The lookup's id: https://am.i.mullvad.net/dnsleak/<id> lists, from any
+                    // machine, the resolvers that asked for it, also when this app was offline.
+                    r.put("dns_leak_id", r_id[0]);
                     r.put("active_network", active != null);
                     if (lookupError != null) {
                         r.put("dns_lookup_error", lookupError);
