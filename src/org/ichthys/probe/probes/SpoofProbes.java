@@ -615,6 +615,99 @@ public final class SpoofProbes {
                 })
                 .timeout(30_000));
 
+        out.add(new Probe(CAT, "spoof.dns_leak",
+                "Which resolvers carry this app's DNS lookups: three lookups of a random name under "
+                        + "dnsleak.am.i.mullvad.net through the system resolver, then Mullvad's list of "
+                        + "the resolvers that asked for it (their countries and the Mullvad flag only, "
+                        + "no addresses). A lookup that works while the app is offline is a leak too.",
+                Probe.NONE,
+                c -> {
+                    final ConnectivityManager cm =
+                            c.app.getSystemService(ConnectivityManager.class);
+                    final Network active = cm.getActiveNetwork();
+                    final String id = java.util.UUID.randomUUID().toString();
+                    int resolved = 0;
+                    String lookupError = null;
+                    for (int i = 0; i < 3; i++) {
+                        try {
+                            // The resolver caches per name: three distinct names, three queries.
+                            java.net.InetAddress.getAllByName(i == 0 ? id + ".dnsleak.am.i.mullvad.net"
+                                    : id.substring(0, 8) + i + "-" + id + ".dnsleak.am.i.mullvad.net");
+                            resolved++;
+                        } catch (Exception e) {
+                            lookupError = Redact.exception(e);
+                        }
+                    }
+                    final Result r = Result.visible();
+                    r.put("dns_lookups_ok", resolved);
+                    r.put("active_network", active != null);
+                    if (lookupError != null) {
+                        r.put("dns_lookup_error", lookupError);
+                    }
+                    final boolean offline = active == null || NetProbes.uidBlocked(c);
+                    // A name that resolves while the app has no network went out somewhere else.
+                    r.put("dns_ok_while_offline", offline && resolved > 0);
+                    HttpURLConnection h = null;
+                    try {
+                        h = (HttpURLConnection) new URL("https://am.i.mullvad.net/dnsleak/" + id)
+                                .openConnection();
+                        h.setConnectTimeout(10_000);
+                        h.setReadTimeout(10_000);
+                        h.setInstanceFollowRedirects(false);
+                        h.setRequestProperty("Accept", "application/json");
+                        final int code = h.getResponseCode();
+                        if (code != 200) {
+                            r.put("dns_check", "error");
+                            r.put("dns_check_error", "HTTP " + code);
+                        } else {
+                            final StringBuilder sb = new StringBuilder();
+                            try (BufferedReader br = new BufferedReader(new InputStreamReader(
+                                    h.getInputStream(), StandardCharsets.UTF_8))) {
+                                String line;
+                                while ((line = br.readLine()) != null && sb.length() < 64_000) {
+                                    sb.append(line);
+                                }
+                            }
+                            final org.json.JSONArray a = new org.json.JSONArray(sb.toString());
+                            final java.util.TreeSet<String> countries = new java.util.TreeSet<>();
+                            boolean mullvad = false;
+                            for (int i = 0; i < a.length(); i++) {
+                                final JSONObject o = a.getJSONObject(i);
+                                countries.add(raw(o.optString("country", "")));
+                                mullvad |= o.optBoolean("mullvad_dns", false);
+                            }
+                            r.put("dns_check", "ok");
+                            r.put("dns_resolvers", a.length());
+                            r.put("dns_resolver_countries",
+                                    countries.isEmpty() ? "none" : String.join("|", countries));
+                            r.put("dns_mullvad", mullvad);
+                        }
+                    } catch (Exception e) {
+                        r.put("dns_check", offline ? "offline" : "error");
+                        r.put("dns_check_error", Redact.exception(e));
+                    } finally {
+                        if (h != null) {
+                            h.disconnect();
+                        }
+                    }
+                    if (Boolean.TRUE.equals(r.detail.get("dns_ok_while_offline"))) {
+                        final Result o = Result.of(Outcome.VISIBLE)
+                                .put("why", "names resolve although the app is offline: DNS leaves "
+                                        + "outside its network");
+                        o.detail.putAll(r.detail);
+                        return o;
+                    }
+                    if (resolved == 0 && offline) {
+                        final Result o = NetProbes.uidBlocked(c)
+                                ? Result.blockedIchthys("offline, and DNS is refused too")
+                                : Result.empty().put("why", "offline: no usable network");
+                        o.detail.putAll(r.detail);
+                        return o;
+                    }
+                    return r;
+                })
+                .timeout(40_000));
+
         out.add(new Probe(CAT, "spoof.broadcasts",
                 "Whether a network-country or time-zone changed broadcast reaches the app within "
                         + "2 s (informational; they are not sticky).",
