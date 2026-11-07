@@ -115,8 +115,10 @@ public final class Expect {
         }
         if (r.outcome == Outcome.ERROR
                 && (mAllowed == null || !mAllowed.contains(Outcome.ERROR))) {
+            // A fail (fail-closed: the promise wasn't checked), but kept distinguishable: Guard's
+            // Verify counts a why starting with "probe error" as an error, not a broken promise.
             r.verdict = Verdict.FAIL;
-            r.verdictWhy = "probe error, the promise couldn't be checked: " + r.detailLine();
+            r.verdictWhy = "probe error: the promise couldn't be checked: " + r.detailLine();
             return;
         }
         if (mAllowed != null && !mAllowed.contains(r.outcome)) {

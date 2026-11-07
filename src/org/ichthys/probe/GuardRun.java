@@ -47,7 +47,6 @@ import java.util.Map;
  *   --es expect_scans real|empty
  *   --es expect_lan allowed|blocked
  *   --es expect_shields id,id,...            (the shields Guard says protect this app)
- *   --es expect_screen_off follow|offline|stay_online
  *   --ei truth_contacts N ... (row counts as the system sees them)
  * </pre>
  *
@@ -55,7 +54,8 @@ import java.util.Map;
  * the run is done the per-probe verdicts go back as an explicit broadcast to
  * {@code reply_component} with the token, so Guard can group them into its categories and
  * compare them with the events its own stream saw. Nothing in the reply is personal: ids,
- * verdicts, outcomes and the redacted detail line.
+ * verdicts, outcomes and the redacted detail line, plus the keyguard and screen state the run
+ * saw ({@code keyguard_locked}, {@code interactive}), so Guard can mark a phase inconclusive.
  */
 public final class GuardRun {
     public static final String ACTION_RESULT = "org.ichthys.probe.action.RESULT";
@@ -68,6 +68,7 @@ public final class GuardRun {
     public static final String EXTRA_EXPECT_SCANS = "expect_scans";
     public static final String EXTRA_EXPECT_LAN = "expect_lan";
     public static final String EXTRA_EXPECT_SHIELDS = "expect_shields";
+    /** No longer sent by Guard: no probe reads it (the rule can't be tested from the screen). */
     public static final String EXTRA_EXPECT_SCREEN_OFF = "expect_screen_off";
     /** Reply extras. */
     public static final String EXTRA_PROBES = "probes";
@@ -75,6 +76,9 @@ public final class GuardRun {
     public static final String EXTRA_DIFF = "diff";
     public static final String EXTRA_REPORT = "report";
     public static final String EXTRA_LABEL = "label";
+    /** Reply extras: the keyguard and screen state at reply time (same sources as Report.device). */
+    public static final String EXTRA_KEYGUARD_LOCKED = "keyguard_locked";
+    public static final String EXTRA_INTERACTIVE = "interactive";
     /** Reply extra: set (with the token) when the run could not happen; the value says why. */
     public static final String EXTRA_ERROR = "error";
 
@@ -106,12 +110,20 @@ public final class GuardRun {
      * otherwise make this app measure and broadcast what it sees to a receiver of its choice.
      */
     public static boolean trustedLaunch(android.app.Activity activity, boolean guardRun) {
+        // Since Android 14 the launcher's identity is only shared when it opts in
+        // (ActivityOptions.setShareIdentityEnabled); Guard does, `am start` from the shell
+        // cannot, so -1 means "unknown", not "an app". A known app uid is refused; an unknown
+        // launcher may start a run, but its replies only ever go to Settings (reply()) and a
+        // busy probe ignores it, so the most it gains is a run of this app's own checks.
         final int uid = activity.getLaunchedFromUid();
+        if (uid < 0) {
+            return true;
+        }
         if (guardRun) {
             return uid == android.os.Process.SYSTEM_UID;
         }
-        return uid == android.os.Process.SYSTEM_UID || uid == android.os.Process.SHELL_UID
-                || uid == android.os.Process.ROOT_UID;
+        // UserHandle.getAppId is hidden from the SDK: the per-user range is 100000.
+        return uid % 100_000 < android.os.Process.FIRST_APPLICATION_UID;
     }
 
     /** Tells Guard at once that this phase could not run (another run is in progress). */
@@ -239,6 +251,11 @@ public final class GuardRun {
             Log.w(Runner.TAG, "reply not built", e);
             return;
         }
+        // A locked or sleeping phone changes many answers (see Report.device): Guard marks the
+        // phase inconclusive from these two, so they travel with the verdicts.
+        final android.app.KeyguardManager km =
+                context.getSystemService(android.app.KeyguardManager.class);
+        final android.os.PowerManager pm = context.getSystemService(android.os.PowerManager.class);
         final Intent i = new Intent(ACTION_RESULT)
                 .setComponent(cn)
                 .addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
@@ -247,6 +264,8 @@ public final class GuardRun {
                 .putExtra(EXTRA_PROBES, probes.toString())
                 .putExtra(EXTRA_IN_SYSTEM, inSystem(context))
                 .putExtra(EXTRA_REPORT, reportFile == null ? "" : reportFile.getPath())
+                .putExtra(EXTRA_KEYGUARD_LOCKED, km != null && km.isKeyguardLocked())
+                .putExtra(EXTRA_INTERACTIVE, pm != null && pm.isInteractive())
                 .putExtra("build_id", Build.ID)
                 .putExtra("pass", report.count(Verdict.PASS))
                 .putExtra("fail", report.count(Verdict.FAIL))

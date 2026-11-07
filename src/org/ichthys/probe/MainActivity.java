@@ -184,7 +184,10 @@ public class MainActivity extends Activity {
             // IchthysOS: only Guard (system uid) may drive a verification, only the shell, root
             // or the system a headless run; anyone else is shown the last run and nothing more.
             if (!GuardRun.trustedLaunch(this, guard)) {
-                Log.w(TAG, "autorun ignored: launched from uid " + getLaunchedFromUid());
+                // The package too (null when the launcher is unknown), for diagnostics.
+                Log.w(TAG, "autorun ignored: launched from uid " + getLaunchedFromUid()
+                        + " package " + getLaunchedFromPackage()
+                        + (guard ? " (guard run)" : ""));
                 toast("Only Guard or adb can start the checks headless.");
                 if (mCtx == null) {
                     mGuardRun = false;
