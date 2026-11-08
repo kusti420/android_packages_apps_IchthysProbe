@@ -43,12 +43,16 @@ import java.util.Map;
  *   --es stand_in Untrusted|Messenger|Maps|...
  *   --es expect_net allowed|blocked          (what Guard's firewall holds for this uid)
  *   --es expect_location real|fake|none      (the location control of the stand-in)
- *   --es expect_fake_latlon "lat,lon"        (the fake place, when the fake place is on)
  *   --es expect_scans real|empty
  *   --es expect_lan allowed|blocked
  *   --es expect_shields id,id,...            (the shields Guard says protect this app)
- *   --ei truth_contacts N ... (row counts as the system sees them)
  * </pre>
+ *
+ * IchthysOS: Guard no longer sends the fake place ({@code expect_fake_latlon}) or its ground
+ * truth ({@code truth_*} row counts): any app installed under this name would have received the
+ * owner's place and data counts. Instead the reply carries what this app saw (the rows of each
+ * read-shield check with its truth name, the fix of location.fake_place) and Guard judges those
+ * checks itself. Headless runs from the shell may still pass {@code --ei truth_<name> N}.
  *
  * Only the probes of Guard's rule categories run (no file system, display, media, camera). When
  * the run is done the per-probe verdicts go back as an explicit broadcast to
@@ -81,6 +85,11 @@ public final class GuardRun {
     public static final String EXTRA_INTERACTIVE = "interactive";
     /** Reply extra: set (with the token) when the run could not happen; the value says why. */
     public static final String EXTRA_ERROR = "error";
+    /** IchthysOS: Result detail keys of a read-shield check: its truth name and rows seen. */
+    public static final String DETAIL_TRUTH_NAME = "truth_name";
+    public static final String DETAIL_SEEN = "seen";
+    /** IchthysOS: Ctx.scratch key of location.fake_place's fix ("lat,lon,accuracy_m"). */
+    public static final String SCRATCH_FIX = "guard_fix";
 
     /** Guard lives in Settings; it is the only valid sender and reply target. */
     public static final String SETTINGS_PACKAGE = "com.android.settings";
@@ -235,6 +244,18 @@ public final class GuardRun {
                 o.put("verdict", r.verdict.key);
                 o.put("outcome", r.outcome.key);
                 o.put("why", r.verdictWhy);
+                // IchthysOS: Guard compares these with its own ground truth and fake place.
+                final String truthName = r.detail.get(DETAIL_TRUTH_NAME);
+                if (truthName != null) {
+                    o.put("truth", truthName);
+                    o.put("seen", r.detail.get(DETAIL_SEEN));
+                }
+                if ("location.fake_place".equals(e.getKey())) {
+                    final Object fix = c.scratch.get(SCRATCH_FIX);
+                    if (fix != null) {
+                        o.put("fix", fix.toString());
+                    }
+                }
                 if (e.getKey().startsWith("spoof.")) {
                     // IchthysOS: the Spoofed values probes carry raw coarse region values
                     // (country, PLMN, operator, zone, locale) that Guard's Verify compares

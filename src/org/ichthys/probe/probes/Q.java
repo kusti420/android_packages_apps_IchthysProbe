@@ -22,6 +22,7 @@ import android.net.Uri;
 
 import org.ichthys.probe.Ctx;
 import org.ichthys.probe.Expect;
+import org.ichthys.probe.GuardRun;
 import org.ichthys.probe.Outcome;
 import org.ichthys.probe.Result;
 import org.ichthys.probe.Shields;
@@ -65,6 +66,10 @@ final class Q {
         }
         r.put("truth_rows", t < 0 ? "unknown" : String.valueOf(t));
         r.put("shield_protects", c.shields.protects(shield));
+        // IchthysOS: Guard no longer hands its ground truth to this app; in a Guard run the
+        // reply carries the truth name and the rows seen, and Guard compares (GuardRun.reply).
+        r.put(GuardRun.DETAIL_TRUTH_NAME, truth);
+        r.put(GuardRun.DETAIL_SEEN, rows);
         return r;
     }
 

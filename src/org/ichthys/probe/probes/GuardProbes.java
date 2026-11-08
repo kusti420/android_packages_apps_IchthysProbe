@@ -130,10 +130,13 @@ public final class GuardProbes {
 
         out.add(new Probe(CAT, "location.fake_place",
                 "Whether a fresh fix is the fake place (within 2 km of it) or the real "
-                        + "position (far from it). Distance bucket only, never coordinates.",
+                        + "position (far from it). Judged by Guard: the fix goes only to Guard "
+                        + "(Settings) with the reply, never into the report or the screen.",
                 perms(ACCESS_COARSE_LOCATION),
                 c -> {
                     final String expect = c.option(GuardRun.EXTRA_EXPECT_LOCATION);
+                    // IchthysOS: Guard no longer tells this app where the fake place is (any app
+                    // under this name would have learnt it); an old Guard may still send it.
                     final String latLon = c.option(GuardRun.EXTRA_EXPECT_FAKE_LATLON);
                     if (expect == null) {
                         return Result.skipped("not a Guard verification run");
@@ -174,8 +177,13 @@ public final class GuardProbes {
                             .put("accuracy_m", Math.round(l.getAccuracy()))
                             .put("age_s", Math.max(0, (SystemClock.elapsedRealtimeNanos()
                                     - l.getElapsedRealtimeNanos()) / 1_000_000_000L));
+                    // For Guard's reply only (GuardRun.reply): ~11 m resolution is plenty for a
+                    // 2 km judgement. Kept out of the detail, so no report or screen shows it.
+                    c.scratch.put(GuardRun.SCRATCH_FIX, String.format(java.util.Locale.ROOT,
+                            "%.4f,%.4f,%d", l.getLatitude(), l.getLongitude(),
+                            Math.round(l.getAccuracy())));
                     if (latLon == null) {
-                        return r.put("distance_to_fake", "unknown (fake place off)");
+                        return r.put("distance_to_fake", "judged by Guard");
                     }
                     final String[] parts = latLon.split(",");
                     if (parts.length < 2) {
@@ -213,15 +221,18 @@ public final class GuardProbes {
                                 // Coarse fixes snap to a ~2 km grid: distances mean nothing.
                                 return "no precise location permission (stock refusal)";
                             }
-                            if (c.option(GuardRun.EXTRA_EXPECT_FAKE_LATLON) == null) {
-                                return "the fake place is off, so a real fix is all there is";
-                            }
+                            // IchthysOS: without the fake place's coordinates (current Guard)
+                            // the distance is Guard's to judge; a pass here only says "a fix
+                            // came", and Guard replaces it with its verdict.
                             return null;
                         })
                         .check((c, r) -> {
                             if (r.outcome != Outcome.VISIBLE) {
                                 return "no fix delivered although Guard allows location ("
                                         + r.outcome.key + ")";
+                            }
+                            if (c.option(GuardRun.EXTRA_EXPECT_FAKE_LATLON) == null) {
+                                return null;
                             }
                             final boolean near = "true".equals(r.detail.get("near_fake_place"));
                             final String says = r.detail.get("guard_says");

@@ -50,9 +50,18 @@ only its length and hash.
 
 ```
 m IchthysProbe IchthysProbeHelper
-adb install out/target/product/a52sxq/system/app/IchthysProbe/IchthysProbe.apk
+tools/sign_probe.sh out/target/product/a52sxq/system/app/IchthysProbe/IchthysProbe.apk /tmp/IchthysProbe-signed.apk
+adb install /tmp/IchthysProbe-signed.apk
 adb install out/target/product/a52sxq/system/app/IchthysProbeHelper/IchthysProbeHelper.apk
 ```
+
+Guard trusts the tester only when it is signed with the dedicated IchthysOS probe key
+(`~/.android-certs/ichthys_probe`; the public cert is `certs/ichthys_probe.x509.pem`, its
+SHA-256 is pinned in Settings' `VerifyRunner.PROBE_CERT_SHA256`). The testkey build of
+`m IchthysProbe` installs and runs on its own, but Guard won't verify with it, give it presets
+or Full access. An already installed testkey build must be uninstalled first (other signer).
+The "Check everything" button only asks: Guard's Verify page opens and the run starts when you
+confirm there.
 
 A freshly installed app is **quarantined by Ichthys Guard** (first-launch quarantine). It is
 suspended until you review it. To release it, open IchthysProbe, tap **Review**, then tap

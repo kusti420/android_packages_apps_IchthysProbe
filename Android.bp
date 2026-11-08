@@ -39,3 +39,25 @@ android_app {
         enabled: false,
     },
 }
+
+// IchthysOS: the same app under a second package name, for a phone whose /system already carries
+// an IchthysProbe (then the real package can only update that system copy and reads as a system
+// app, which the fake place never spoofs). Install with adb like the real one; same reports.
+android_app {
+    name: "IchthysProbeUser",
+    srcs: ["src/**/*.java"],
+    // No LAUNCHER category: Guard's first-launch quarantine only holds apps with a launcher
+    // activity, and releasing it needs the screen. Start it with am start / the autorun extras.
+    manifest: "AndroidManifest_user.xml",
+    resource_dirs: [],
+    sdk_version: "current",
+    certificate: "testkey",
+    privileged: false,
+    aaptflags: ["--rename-manifest-package", "org.ichthys.probeuser"],
+    optimize: {
+        enabled: false,
+    },
+    dex_preopt: {
+        enabled: false,
+    },
+}
